@@ -141,7 +141,12 @@ int main(void)
     // Disable the Peripheral Interrupts 
     //INTERRUPT_PeripheralInterruptDisable(); 
 
- 
+    // Change SPI Slave address to use GPIO as lsbs
+    //SSPADD = 0x18;
+    
+    uint8_t i2cAddr = 0xC | (A1_GetValue() << 1) | A0_GetValue();
+    i2cAddr = i2cAddr << 1;
+    SSPADD = i2cAddr;
     
     I2C_client_example_polling();
     
