@@ -146,17 +146,14 @@ int main(void)
     
     uint8_t i2cAddr = 0xC | (A1_GetValue() << 1) | A0_GetValue();
     i2cAddr = i2cAddr << 1;
-    SSPADD = i2cAddr;
+    SSP1ADD = i2cAddr;
     
     I2C_client_example_polling();
     
     CLIENT_DATA[4] = 0x55;
     CLIENT_DATA[5] = 0xaa;
 
-    ANSELH = 0;
-    ANSEL = 64;
-    
-    ADC_SelectChannel(posChannel_AN6);
+    ADC_ChannelSelect(ADC_CHANNEL_ANC0);
     BUTTON_SetDigitalInput();
     
     //BUTTON_SetDigitalMode();
@@ -168,24 +165,15 @@ int main(void)
         // Check if command for general processing
         if (CLIENT_DATA[0] == 0x10)
         {
-            ADC_StartConversion();
+            ADC_ConversionStart();
             while(!ADC_IsConversionDone());
-            uint16_t res = ADC_GetConversionResult();
+            uint16_t res = ADC_ConversionResultGet();
             CLIENT_DATA[1] = (res >> 8) & 0xff;
             CLIENT_DATA[2] = res & 0xff;
             CLIENT_DATA[3] = BUTTON_GetValue();
 
             // Reset command register
             CLIENT_DATA[9] = 0;
-        }
-        
-        if (BUTTON_GetValue())
-        {
-            LED_SetHigh();
-        }
-        else
-        {
-            LED_SetLow();
         }
     }
 }
