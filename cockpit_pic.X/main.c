@@ -167,7 +167,7 @@ int main(void)
         {
             ADC_ConversionStart();
             while(!ADC_IsConversionDone());
-            uint16_t res = ADC_ConversionResultGet();
+            int16_t res = ADC_ConversionResultGet();
             CLIENT_DATA[1] = (res >> 8) & 0xff;
             CLIENT_DATA[2] = res & 0xff;
             CLIENT_DATA[3] = BUTTON_GetValue();
