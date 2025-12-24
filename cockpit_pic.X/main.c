@@ -10,6 +10,21 @@ volatile static uint8_t CLIENT_DATA[I2C_CLIENT_LOCATION_SIZE] = {
     0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09
 };
 
+// CLIENT_DATA holds all measurements and acts as command
+// The following is how to decode the CLIENT_DATA:
+// 0 - Not used (or used for addressing, not really sure) 
+// 1 - MSB potentiometer 0
+// 2 - LSB potentiometer 0
+// 3 - MSB potentiometer 1
+// 4 - LSB potentiometer 1
+// 5 - Button state 31 - 24
+// 6 - Button state 23 - 16
+// 7 - Button state 15 - 8
+// 8 - Button state 7 - 0
+// 9 - PIC will do measurements when this is set to 0x10, will set to 0x00 when
+//     read from PIC
+
+
 static uint8_t clientLocation  = 0x00;
 static bool isClientLocation = false;
 
@@ -150,14 +165,11 @@ int main(void)
     
     I2C_client_example_polling();
     
-    CLIENT_DATA[4] = 0x55;
-    CLIENT_DATA[5] = 0xaa;
+    int16_t adcResponse = 0;
 
+    // Prepare to start channel 0
     ADC_ChannelSelect(ADC_CHANNEL_ANC0);
-    BUTTON_SetDigitalInput();
     
-    //BUTTON_SetDigitalMode();
-
     while (1)
     {
         I2C1_Client.Tasks();
@@ -165,15 +177,68 @@ int main(void)
         // Check if command for general processing
         if (CLIENT_DATA[0] == 0x10)
         {
+            // Measure ADC 0
             ADC_ConversionStart();
             while(!ADC_IsConversionDone());
-            int16_t res = ADC_ConversionResultGet();
-            CLIENT_DATA[1] = (res >> 8) & 0xff;
-            CLIENT_DATA[2] = res & 0xff;
-            CLIENT_DATA[3] = BUTTON_GetValue();
+            adcResponse = ADC_ConversionResultGet();
+            CLIENT_DATA[1] = (adcResponse >> 8) & 0xff;
+            CLIENT_DATA[2] = adcResponse & 0xff;
+
+            // Prepare for next channel
+            ADC_ChannelSelect(ADC_CHANNEL_ANC1);
+
+            uint8_t row[5];
+
+            // Fetch all key presses
+            // for (uint8_t i = 0; i < 4; i++)
+            // {
+            //    LATA = 0x01 << i;
+            //     row[i] = LATB;                
+            // }
+            
+            //// Decode key presses into CLIENT_DATA
+            //CLIENT_DATA[5] = 0; // Zero for now, TODO: Add more keys
+            //CLIENT_DATA[6] = ((row[3] & 0x1e) >> 1);
+            //CLIENT_DATA[7] = ((row[3] & 0x1) << 7) | ((row[2] & 0x1f) << 2) | ((row[1] & 0x18) >> 3);
+            //CLIENT_DATA[8] = ((row[1] & 0x7) << 5) | (row[0] & 0x1f);
+
+            LATA = 0x1f;
+            TRISA = 0xfe;
+            CLIENT_DATA[5] = PORTB;
+            // TRISA = 0xfd;
+            // LATA = 0x2;
+            // CLIENT_DATA[6] = PORTB;
+            // TRISA = 0xfb;
+            // LATA = 0x4;
+            // CLIENT_DATA[7] = PORTB;
+            // TRISA = 0xf7;
+            // LATA = 0x8;
+            // CLIENT_DATA[8] = PORTB;
+
+            // LATA = 0x2;
+            // CLIENT_DATA[6] = LATB;
+            // LATA = 0x4;
+            // CLIENT_DATA[7] = LATB;
+            //LATA = 0x8;
+            //CLIENT_DATA[8] = LATB;
+            
+            // Measure ADC 1
+            
+            __delay_us(10);
+            
+            ADC_ConversionStart();
+            while(!ADC_IsConversionDone());
+            adcResponse = ADC_ConversionResultGet();
+            CLIENT_DATA[3] = (adcResponse >> 8) & 0xff;
+            CLIENT_DATA[4] = adcResponse & 0xff;
+
 
             // Reset command register
             CLIENT_DATA[9] = 0;
+            
+            // Prepare to start channel 0 again for next round robin
+            ADC_ChannelSelect(ADC_CHANNEL_ANC0);
+
         }
     }
 }
