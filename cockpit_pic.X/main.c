@@ -197,6 +197,10 @@ int main(void)
             for (uint8_t i = 0; i < 4; i++)
             {
                LATA = 0x01 << i;
+               
+               // Short delay to settle voltages before reading
+               __delay_us(1);
+               
                row[i] = PORTB;                
             }
             
