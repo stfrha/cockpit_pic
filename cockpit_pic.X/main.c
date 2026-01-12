@@ -169,6 +169,10 @@ int main(void)
 
     // Prepare to start channel 0
     ADC_ChannelSelect(ADC_CHANNEL_ANC0);
+
+    // Set Port A to output for column selection
+    TRISA = 0x0;
+
     
     while (1)
     {
@@ -190,38 +194,29 @@ int main(void)
             uint8_t row[5];
 
             // Fetch all key presses
-            // for (uint8_t i = 0; i < 4; i++)
-            // {
-            //    LATA = 0x01 << i;
-            //     row[i] = LATB;                
-            // }
+            for (uint8_t i = 0; i < 4; i++)
+            {
+               LATA = 0x01 << i;
+               row[i] = PORTB;                
+            }
             
-            //// Decode key presses into CLIENT_DATA
-            //CLIENT_DATA[5] = 0; // Zero for now, TODO: Add more keys
-            //CLIENT_DATA[6] = ((row[3] & 0x1e) >> 1);
-            //CLIENT_DATA[7] = ((row[3] & 0x1) << 7) | ((row[2] & 0x1f) << 2) | ((row[1] & 0x18) >> 3);
-            //CLIENT_DATA[8] = ((row[1] & 0x7) << 5) | (row[0] & 0x1f);
+            // Code key presses into CLIENT_DATA
+            CLIENT_DATA[5] = 0; // Zero for now, TODO: Add more keys
+            CLIENT_DATA[6] = ((row[3] & 0x1e) >> 1);
+            CLIENT_DATA[7] = ((row[3] & 0x1) << 7) | ((row[2] & 0x1f) << 2) | ((row[1] & 0x18) >> 3);
+            CLIENT_DATA[8] = ((row[1] & 0x7) << 5) | (row[0] & 0x1f);
 
-            LATA = 0x1f;
-            TRISA = 0xfe;
-            CLIENT_DATA[5] = PORTB;
-            // TRISA = 0xfd;
+            // LATA = 0x01;
+            // CLIENT_DATA[1] = PORTB;
             // LATA = 0x2;
-            // CLIENT_DATA[6] = PORTB;
-            // TRISA = 0xfb;
+            // CLIENT_DATA[2] = PORTB;
             // LATA = 0x4;
-            // CLIENT_DATA[7] = PORTB;
-            // TRISA = 0xf7;
+            // CLIENT_DATA[3] = PORTB;
             // LATA = 0x8;
-            // CLIENT_DATA[8] = PORTB;
+            // CLIENT_DATA[4] = PORTB;
+            // LATA = 0x10;
+            // CLIENT_DATA[5] = PORTB;
 
-            // LATA = 0x2;
-            // CLIENT_DATA[6] = LATB;
-            // LATA = 0x4;
-            // CLIENT_DATA[7] = LATB;
-            //LATA = 0x8;
-            //CLIENT_DATA[8] = LATB;
-            
             // Measure ADC 1
             
             __delay_us(10);
@@ -231,7 +226,6 @@ int main(void)
             adcResponse = ADC_ConversionResultGet();
             CLIENT_DATA[3] = (adcResponse >> 8) & 0xff;
             CLIENT_DATA[4] = adcResponse & 0xff;
-
 
             // Reset command register
             CLIENT_DATA[9] = 0;
