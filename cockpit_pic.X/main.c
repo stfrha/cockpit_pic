@@ -13,9 +13,9 @@ volatile static uint8_t CLIENT_DATA[I2C_CLIENT_LOCATION_SIZE] = {
 // CLIENT_DATA holds all measurements and acts as command
 // The following is how to decode the CLIENT_DATA:
 // 0 - Not used (or used for addressing, not really sure) 
-// 1 - MSB potentiometer 0
+// 1 - Left rotary encoder steps since last report + MSB potentiometer 0
 // 2 - LSB potentiometer 0
-// 3 - MSB potentiometer 1
+// 3 - Right rotary encoder steps since last report + MSB potentiometer 1
 // 4 - LSB potentiometer 1
 // 5 - Button state 31 - 24
 // 6 - Button state 23 - 16
@@ -24,11 +24,16 @@ volatile static uint8_t CLIENT_DATA[I2C_CLIENT_LOCATION_SIZE] = {
 // 9 - PIC will do measurements when this is set to 0x10, will set to 0x00 when
 //     read from PIC
 
+static int16_t leftRotarySteps = 0;
+static int16_t rightRotarySteps = 0;
+static int16_t reportLeftRotarySteps = 0;
+static int16_t reportRightRotarySteps = 0;
+
 
 static uint8_t clientLocation  = 0x00;
 static bool isClientLocation = false;
 
-int I2C_client_example_polling(void)
+void I2C_client_example_polling(void)
 {
     I2C1_Client.CallbackRegister(Client_Application);
 }
@@ -135,23 +140,53 @@ static bool Client_Application(i2c_client_transfer_event_t event)
     Main application
 */
 
+
+// Interrupt handlers 
+
+void RightRotaryHandler(void)
+{
+    if (RGT_RE_B_GetValue() == 0)
+    {
+        rightRotarySteps++;
+    }
+    else
+    {
+        rightRotarySteps--;
+    }
+}
+
+void LeftRotaryHandler(void)
+{
+    if (LFT_RE_B_GetValue() == 0)
+    {
+        leftRotarySteps++;
+    }
+    else
+    {
+        leftRotarySteps--;
+    }
+}
+
+
+
 // Private variable
 
 int main(void)
 {
     SYSTEM_Initialize();
+    
     // If using interrupts in PIC18 High/Low Priority Mode you need to enable the Global High and Low Interrupts 
     // If using interrupts in PIC Mid-Range Compatibility Mode you need to enable the Global and Peripheral Interrupts 
     // Use the following macros to: 
 
     // Enable the Global Interrupts 
-    //INTERRUPT_GlobalInterruptEnable(); 
+    INTERRUPT_GlobalInterruptEnable(); 
 
     // Disable the Global Interrupts 
     //INTERRUPT_GlobalInterruptDisable(); 
 
     // Enable the Peripheral Interrupts 
-    //INTERRUPT_PeripheralInterruptEnable(); 
+    INTERRUPT_PeripheralInterruptEnable(); 
 
     // Disable the Peripheral Interrupts 
     //INTERRUPT_PeripheralInterruptDisable(); 
@@ -170,12 +205,13 @@ int main(void)
     // Prepare to start channel 0
     ADC_ChannelSelect(ADC_CHANNEL_ANC0);
 
-    // Set Port A to output for column selection
-    TRISA = 0x0;
+    // Register interrupt handlers
+    LFT_RE_A_SetInterruptHandler(LeftRotaryHandler);
+    RGT_RE_A_SetInterruptHandler(RightRotaryHandler);
 
-    
     while (1)
     {
+                
         I2C1_Client.Tasks();
         
         // Check if command for general processing
@@ -185,16 +221,25 @@ int main(void)
             ADC_ConversionStart();
             while(!ADC_IsConversionDone());
             adcResponse = ADC_ConversionResultGet();
-            CLIENT_DATA[1] = (adcResponse >> 8) & 0xff;
-            CLIENT_DATA[2] = adcResponse & 0xff;
+            
+            int8_t rotaryDiff = 0;
 
+            if (leftRotarySteps != reportLeftRotarySteps)
+            {
+                rotaryDiff = (int8_t)(leftRotarySteps - reportLeftRotarySteps);
+                reportLeftRotarySteps = leftRotarySteps;
+            }
+            
+            CLIENT_DATA[1] = (uint8_t)((rotaryDiff << 4) & 0xf0) | ((adcResponse >> 8) & 0x3);
+            CLIENT_DATA[2] = adcResponse & 0xff;
+           
             // Prepare for next channel
             ADC_ChannelSelect(ADC_CHANNEL_ANC1);
 
-            uint8_t row[5];
+            uint8_t row[6];
 
             // Fetch all key presses
-            for (uint8_t i = 0; i < 4; i++)
+            for (uint8_t i = 0; i < 6; i++)
             {
                LATA = 0x01 << i;
                
@@ -205,34 +250,33 @@ int main(void)
             }
             
             // Code key presses into CLIENT_DATA
-            CLIENT_DATA[5] = 0; // Zero for now, TODO: Add more keys
-            CLIENT_DATA[6] = ((row[3] & 0x1e) >> 1);
+            CLIENT_DATA[5] = ((row[5] & 0x1f) << 1) | ((row[4] & 0x10) >> 4);
+            CLIENT_DATA[6] = ((row[4] & 0xf) << 4) | ((row[3] & 0x1e) >> 1);
             CLIENT_DATA[7] = ((row[3] & 0x1) << 7) | ((row[2] & 0x1f) << 2) | ((row[1] & 0x18) >> 3);
             CLIENT_DATA[8] = ((row[1] & 0x7) << 5) | (row[0] & 0x1f);
 
-            // LATA = 0x01;
-            // CLIENT_DATA[1] = PORTB;
-            // LATA = 0x2;
-            // CLIENT_DATA[2] = PORTB;
-            // LATA = 0x4;
-            // CLIENT_DATA[3] = PORTB;
-            // LATA = 0x8;
-            // CLIENT_DATA[4] = PORTB;
-            // LATA = 0x10;
-            // CLIENT_DATA[5] = PORTB;
-
             // Measure ADC 1
-            
             __delay_us(10);
             
             ADC_ConversionStart();
+
             while(!ADC_IsConversionDone());
+
             adcResponse = ADC_ConversionResultGet();
-            CLIENT_DATA[3] = (adcResponse >> 8) & 0xff;
+
+            rotaryDiff = 0;
+
+            if (rightRotarySteps != reportRightRotarySteps)
+            {
+                rotaryDiff = (int8_t)(rightRotarySteps - reportRightRotarySteps);
+                reportRightRotarySteps = rightRotarySteps;
+            }
+
+            CLIENT_DATA[3] = (uint8_t)((rotaryDiff << 4) & 0xf0) | ((adcResponse >> 8) & 0x3);
             CLIENT_DATA[4] = adcResponse & 0xff;
 
             // Reset command register
-            CLIENT_DATA[9] = 0;
+            CLIENT_DATA[0] = 0;
             
             // Prepare to start channel 0 again for next round robin
             ADC_ChannelSelect(ADC_CHANNEL_ANC0);
