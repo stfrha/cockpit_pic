@@ -244,7 +244,7 @@ int main(void)
                LATA = 0x01 << i;
                
                // Short delay to settle voltages before reading
-               __delay_us(1);
+               __delay_us(3);
                
                row[i] = PORTB;                
             }
